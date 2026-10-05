@@ -1,245 +1,131 @@
-# CAT-TrackIQ
+# CAT TrackIQ
 
-### Equipment Demand Forecasting, Anomaly Detection & Decision Intelligence
+CAT TrackIQ is a Python prototype for rental-equipment decision intelligence. It turns equipment telemetry and rental history into four practical outputs:
 
-CAT-TrackIQ is a machine-learning and decision-intelligence prototype designed for rental equipment operations. The project focuses on forecasting equipment demand, identifying unusual utilization patterns, and generating recommendation signals to support better equipment allocation.
+- utilization percentages for each asset
+- transparent, rule-based anomaly records
+- site and equipment-type demand forecasts
+- prioritized reallocation recommendations with demo cost estimates
 
-> **Current scope:** This repository focuses on the **machine-learning and decision-intelligence component** of CAT-TrackIQ and uses synthetic demonstration data. It does not represent a production Caterpillar system.
+The project is intentionally small and library-oriented. It uses synthetic data to demonstrate the workflow and does not claim production Caterpillar accuracy.
 
----
-
-## 📌 Problem Statement
-
-Rental equipment businesses need to balance equipment availability across different locations and equipment types.
-
-Poor demand visibility can lead to:
-
-- Equipment shortages at high-demand sites
-- Underutilized equipment
-- Inefficient equipment allocation
-- Delayed operational decisions
-- Difficulty identifying unusual utilization patterns
-
-CAT-TrackIQ explores how machine learning and data-driven decision support can help address these challenges.
-
----
-
-## 🚀 Key Features
-
-### 1. Demand Forecasting
-
-A **Random Forest Regressor** is used to forecast future equipment demand.
-
-The forecasting pipeline:
-
-1. Processes historical rental data
-2. Uses earlier observations for training
-3. Tests the model on later unseen observations
-4. Generates equipment demand predictions
-5. Evaluates predictions against actual demand
-
-The chronological evaluation approach is designed to better represent a real forecasting scenario where the model predicts future demand from historical information.
-
----
-
-### 2. Anomaly Detection
-
-The project includes anomaly detection logic to identify unusual equipment utilization or operational patterns.
-
-These signals can help highlight situations that may require further investigation.
-
-The current implementation uses rule-based logic rather than claiming a production-grade anomaly detection system.
-
----
-
-### 3. Equipment Reallocation Recommendations
-
-The project generates recommendation signals based on demand and equipment conditions.
-
-These recommendations are intended as **decision support** rather than autonomous actions.
-
-The goal is to help identify potential opportunities to move or reallocate equipment where demand may be higher.
-
----
-
-## 📊 Forecast Evaluation
-
-The forecasting model uses a **chronological holdout strategy** instead of a random train-test split.
-
-### Why chronological evaluation?
-
-In a real forecasting problem, future data should not be used to train the model before making predictions.
-
-Therefore:
+## Project layout
 
 ```text
-Earlier Historical Data
-        ↓
-     Training
-        ↓
-Random Forest Model
-        ↓
-Later Unseen Data
-        ↓
-    Forecasts
-        ↓
-   Evaluation
+intelligence/
+	anomaly.py          Rule-based anomaly detection
+	forecasting.py      Synthetic history, forecasting, and evaluation
+	recommendations.py  Reallocation scoring and recommendations
+	utilization.py      Asset utilization calculation
+tests/
+	test_intelligence.py
+```
 
-This approach better reflects the actual task of predicting future rental demand.
+## Requirements
 
-📏 Evaluation Metrics
-Mean Absolute Error (MAE)
+- Python 3.10 or newer
+- `scikit-learn`
+- `pytest` for development and verification
 
-MAE is the primary evaluation metric because equipment demand is measured in equipment-count units.
+## Setup
 
-It represents the average absolute difference between predicted and actual demand.
+From the repository root, create and activate a virtual environment:
 
-Root Mean Squared Error (RMSE)
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install scikit-learn pytest
+```
 
-RMSE is also reported to provide additional insight into prediction errors and gives greater weight to larger errors.
+## Run the tests
 
-R² Score
+```powershell
+python -m pytest
+```
 
-R² is used as an additional measure of how much variation in the target variable is explained by the model.
+The tests cover utilization calculations, anomaly rules, synthetic-history generation, demand forecasting, recommendation scoring, serialization, and forecast evaluation.
 
-🆚 Baseline Comparison
+## Quick start
 
-The Random Forest forecasting model is compared against a simple baseline.
+The main functions accept ordinary Python lists and dictionaries, so they can be called from a service, notebook, or application layer:
 
-Baseline
+```python
+from intelligence.anomaly import detect_anomalies
+from intelligence.forecasting import (
+		evaluate_forecast_model,
+		forecast_demand,
+		generate_synthetic_history,
+)
+from intelligence.recommendations import generate_recommendations
+from intelligence.utilization import calculate_utilization
 
-The baseline uses the mean demand for the same site and equipment type, calculated using the same earlier training period.
+assets = [
+		{
+				"equipment_id": "EQX1001",
+				"type": "Excavator",
+				"site_id": "S003",
+				"operator_id": "OP101",
+				"status": "ACTIVE",
+				"engine_hours_per_day": 1.5,
+				"idle_hours_per_day": 10,
+		}
+]
 
-This provides a simple reference point for determining whether the machine-learning model provides value beyond a basic historical average.
+history = generate_synthetic_history(days=180, seed=42)
+anomalies = detect_anomalies(assets)
+forecasts = forecast_demand(history, assets)
+recommendations = generate_recommendations(assets, forecasts, anomalies)
+evaluation = evaluate_forecast_model(history)
 
-Historical Data
-      │
-      ├── Random Forest Forecast
-      │
-      └── Site + Equipment Mean Baseline
-                    │
-                    ↓
-              Compare Results
-                    │
-                    ↓
-             MAE / RMSE / R²
-🧠 Methodology
+print(calculate_utilization(assets[0]))
+print(anomalies)
+print(forecasts)
+print(recommendations)
+print(evaluation["model"])
+```
 
-The current workflow follows these stages:
+## Input contracts
 
-Load historical equipment demand data
-Prepare and process the data
-Separate training and future test periods chronologically
-Create the required forecasting features
-Train the Random Forest model
-Generate predictions for the unseen period
-Calculate MAE, RMSE and R²
-Compare results with the historical mean baseline
-Identify unusual utilization patterns
-Generate equipment reallocation signals
-Use the results as decision-support information
-🌲 Why Random Forest?
+### Asset records
 
-Random Forest was selected as the initial forecasting model because it can:
+Asset dictionaries should provide `equipment_id`, `type`, `site_id`, `operator_id`, `status`, `engine_hours_per_day`, and `idle_hours_per_day`. `forecast_demand` also uses the asset `type` and `site_id` to count available equipment. Assets with status `BROKEN`, `MAINTENANCE`, or `RETIRED` are excluded from availability counts.
 
-Capture nonlinear relationships
-Handle interactions between features
-Work well with structured/tabular data
-Require relatively little preprocessing
-Provide a strong baseline for experimentation
+### History records
 
-The model is intended as a starting point rather than a claim that Random Forest is optimal for all rental-demand forecasting scenarios.
+Each history record must contain:
 
-🛠️ Tech Stack
-Technology	Purpose
-Python	Core development
-Pandas	Data processing
-NumPy	Numerical operations
-Scikit-learn	Machine learning
-Random Forest Regressor	Demand forecasting
-MAE	Primary evaluation metric
-RMSE	Error evaluation
-R²	Additional model evaluation
-Synthetic Data	Demonstration and testing
-📂 Project Structure
+```python
+{
+		"date": "2025-06-01",
+		"site_id": "S001",
+		"equipment_type": "Excavator",
+		"rental_count": 5,
+}
+```
 
-The exact structure may vary depending on the implementation. A typical organization is:
+The forecasting module currently recognizes sites `S001` through `S006` and equipment types `Excavator`, `Bulldozer`, `Crane`, and `Grader`. Invalid history rows are ignored during model construction.
 
-CAT-TrackIQ/
-│
-├── data/
-│   └── synthetic/
-│
-├── notebooks/
-│   └── forecasting_analysis.ipynb
-│
-├── src/
-│   ├── forecasting/
-│   ├── anomaly_detection/
-│   └── recommendations/
-│
-├── README.md
-└── requirements.txt
+## Forecast evaluation
 
-Update this section if your repository uses different file or folder names.
+`evaluate_forecast_model` uses a chronological holdout: earlier dates train the model and later dates form the test set. This avoids mixing future observations into training data.
 
-📈 Current Evaluation Scope
+The model is a `RandomForestRegressor`. It is compared with a site-and-equipment-type training-mean baseline using:
 
-The current experiments use synthetic demonstration history.
+- MAE, the primary metric because demand is measured in equipment units
+- RMSE, which gives larger errors more weight
+- R2, when it is numerically meaningful
 
-Therefore, the results should be interpreted as validation of:
+The returned evaluation record includes train/test date boundaries, record counts, model and baseline metrics, improvement versus baseline, a data-leakage check, and known limitations.
 
-The forecasting pipeline
-The evaluation methodology
-The model-vs-baseline comparison
-The overall decision-support approach
+## Important limitations
 
-They should not be interpreted as production-level Caterpillar forecasting accuracy.
+- Forecast history is synthetic and generated with a fixed default seed.
+- Demo rental rates and relocation costs are assumptions in INR, marked with `pricing_type: "DEMO_ASSUMPTION"`.
+- The forecast predicts seven days after the latest history date.
+- No database, API, authentication, persistence, or production monitoring is included.
+- Replace the synthetic history and demo pricing with validated business data before using recommendations operationally.
 
-For a real deployment, the same evaluation process would be repeated using actual historical rental data, with the model retrained on the relevant historical period before generating forecasts.
+## License
 
-⚠️ Limitations
-
-The current prototype has several limitations:
-
-Uses synthetic rather than real rental history
-Does not represent production Caterpillar data
-Limited historical context
-No production deployment
-No live equipment telemetry integration
-Recommendation signals are not autonomous actions
-Anomaly detection currently uses rule-based logic
-
-These limitations are intentional and define the current scope of the prototype.
-
-🔮 Future Improvements
-
-Potential future improvements include:
-
-Integrating real rental transaction data
-Adding lag and rolling-window demand features
-Comparing Random Forest with XGBoost and time-series models
-Evaluating forecasts across individual sites and equipment types
-Adding prediction confidence intervals
-Implementing statistical or machine-learning-based anomaly detection
-Adding model explainability
-Monitoring model drift
-Building an interactive analytics dashboard
-Deploying the forecasting pipeline through an API
-Automating model retraining and evaluation
-Adding human-in-the-loop approval for reallocation recommendations
-🎯 Key Takeaway
-
-CAT-TrackIQ explores a data-driven workflow for rental equipment decision support:
-
-Forecast Demand
-      ↓
-Detect Unusual Patterns
-      ↓
-Evaluate Model Performance
-      ↓
-Generate Recommendation Signals
-      ↓
-Support Better Equipment Decisions
-
-The project demonstrates how machine learning can be combined with structured operational logic to turn historical equipment data into actionable decision-support insights.
+No license has been declared for this prototype.
